@@ -14,7 +14,9 @@ struct image2d {
 	inline color_type &at(int x, int y) { return data[y * width + x]; }
 	inline const color_type &at(int x, int y) const { return data[y * width + x]; }
 	inline const color_type &at(ivec2 pos) const { return data[pos.y * width + pos.x]; }
+	// With gamma correction
 	inline void write_vec3(int x, int y, vec3 color) {
+		color = sqrt(max(color, vec3(0.0)));
 		this->at(x, y) = clamp(
 			{uint8_t(255.999 * color.r), uint8_t(255.999 * color.g), uint8_t(255.999 * color.b)},
 			color_type(0), color_type(0xFF));
@@ -56,8 +58,15 @@ template <length_t L, typename T, qualifier Q> struct fmt::formatter<vec<L, T, Q
 	}
 };
 
+template <typename glm_vec> inline auto length_square(const glm_vec &v) { return dot(v, v); }
+template <typename glm_vec> inline bool near_zero(const glm_vec &v) {
+	return length_square(v) < 1e-10;
+}
+inline vec3 reflect_vec3(vec3 v, vec3 n) { return v - 2 * dot(v, n) * n; }
+
 struct ray3d {
 	vec3 origin, direction;
+	inline ray3d() = default;
 	inline ray3d(vec3 orig, vec3 dir) : origin(orig), direction(dir) {}
 	inline vec3 at(float t) const { return origin + t * direction; }
 };
@@ -71,7 +80,9 @@ struct interval {
 	inline float size() const { return max_val - min_val; }
 	inline bool contains(float x) const { return min_val <= x && x <= max_val; }
 	inline bool surrounds(float x) const { return min_val < x && x < max_val; }
-	inline float clamp(float x) const { return x > max_val ? max_val : (x < min_val ? min_val : x); }
+	inline float clamp(float x) const {
+		return x > max_val ? max_val : (x < min_val ? min_val : x);
+	}
 };
 const interval interval::empty = interval(+FLT_MAX, -FLT_MAX);
 const interval interval::universe = interval(-FLT_MAX, +FLT_MAX);

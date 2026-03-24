@@ -1,12 +1,16 @@
 #pragma once
+#include <memory>
 #include <concepts>
+#include "material.hpp"
 #include "raytracing.hpp"
 
+struct material;
 struct hit_record {
 	vec3 point;
 	int front_facing; // 0 for false, 1 for true
 	vec3 normal;
 	float t;
+	std::shared_ptr<material> mat;
 	// Assume outward_normal to be a unit vector
 	inline void set_face_normal(const ray3d &r, vec3 outward_normal) {
 		front_facing = dot(r.direction, outward_normal) < 0;
@@ -23,9 +27,10 @@ struct sphere3d {
 public:
 	vec3 center;
 	float radius;
+	std::shared_ptr<material> mat;
 
 public:
-	sphere3d(vec3 c, float r) : center(c), radius(r) {}
+	sphere3d(vec3 c, float r, std::shared_ptr<material> mat) : center(c), radius(r), mat(mat) {}
 	inline bool hit(const ray3d &r, interval t_interval, hit_record &rec) const {
 		vec3 oc = center - r.origin;
 		float a = dot(r.direction, r.direction);
@@ -46,6 +51,7 @@ public:
 		rec.point = r.at(root);
 		vec3 outward_normal = normalize(rec.point - center);
 		rec.set_face_normal(r, outward_normal);
+		rec.mat = mat;
 		return true;
 	}
 };

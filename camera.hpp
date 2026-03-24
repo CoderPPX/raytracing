@@ -27,10 +27,15 @@ protected:
 		if (recursion_depth >= max_recursion_depth) {
 			return vec3(0.0);
 		}
-		if (hit(ray, interval(0.00001, +INFINITY), record, t1, ts...)) {
-			vec3 direction = generator.random_unit_vec3_hemisphere(record.normal);
-			return 0.5f * ray_color(ray3d(record.point, direction), generator, recursion_depth + 1,
-									t1, ts...);
+		if (hit(ray, interval(0.001, +INFINITY), record, t1, ts...)) {
+			ray3d scattered;
+			vec3 attenuation;
+			if (record.mat->scatter(ray, record.normal, record.point, attenuation, scattered,
+									generator)) {
+				return attenuation *
+					   ray_color(scattered, generator, recursion_depth + 1, t1, ts...);
+			}
+			return vec3(0.0);
 		}
 		vec3 unit_direction = normalize(ray.direction);
 		float a = 0.5 * (unit_direction.y + 1.0);
