@@ -1,7 +1,6 @@
 #pragma once
 #include <memory>
 #include <concepts>
-#include "material.hpp"
 #include "raytracing.hpp"
 
 struct material;
@@ -17,6 +16,9 @@ struct hit_record {
 		normal = front_facing ? outward_normal : -outward_normal;
 	}
 };
+
+// Include here to avoid circular dependency
+#include "material.hpp"
 
 template <typename T>
 concept hittable = requires(T t, const ray3d &r, interval t_interval, hit_record &rec) {
@@ -74,7 +76,7 @@ public:
 		}
 		rec.t = t;
 		rec.point = r.at(t);
-		rec.set_face_normal(r, normal);
+		rec.set_face_normal(r, normalize(normal));
 		return true;
 	}
 };

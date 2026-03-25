@@ -30,8 +30,7 @@ protected:
 		if (hit(ray, interval(0.001, +INFINITY), record, t1, ts...)) {
 			ray3d scattered;
 			vec3 attenuation;
-			if (record.mat->scatter(ray, record.normal, record.point, attenuation, scattered,
-									generator)) {
+			if (record.mat->scatter(ray, record, attenuation, scattered, generator)) {
 				return attenuation *
 					   ray_color(scattered, generator, recursion_depth + 1, t1, ts...);
 			}

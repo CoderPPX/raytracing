@@ -1,36 +1,63 @@
 #pragma once
 #include "random.hpp"
-#include "hittable.hpp"
 
+struct hit_record;
 struct material {
-	virtual bool scatter(const ray3d &ray_in, vec3 hit_normal, vec3 hit_point, vec3 &attenuation,
+	virtual bool scatter(const ray3d &ray_in, const hit_record &record, vec3 &attenuation,
 						 ray3d &scattered, random_generator &generator) const {
 		return false;
 	};
+	virtual ~material() = default;
 };
 
 struct metal : public material {
-	vec3 albedo{1.0, 1.0, 1.0};
-	virtual bool scatter(const ray3d &ray_in, vec3 hit_normal, vec3 hit_point, vec3 &attenuation,
-						 ray3d &scattered, random_generator &generator) const override {
-		vec3 reflected = reflect(ray_in.direction, hit_normal);
-		scattered = ray3d(hit_point, reflected);
+	vec3 albedo;
+	float fuzz_factor;
+	inline metal(vec3 color = vec3{1.0, 0.0, 0.0}, float fuzz = 0.05)
+		: albedo(color), fuzz_factor(fuzz) {}
+	inline virtual bool scatter(const ray3d &ray_in, const hit_record &record, vec3 &attenuation,
+								ray3d &scattered, random_generator &generator) const override {
+		vec3 reflected = reflect(ray_in.direction, record.normal);
+		reflected = normalize(reflected) + (fuzz_factor * generator.random_unit_vec3());
+		scattered = ray3d(record.point, reflected);
 		attenuation = albedo;
-		return true;
+		return dot(reflected, record.normal) > 0.0;
 	}
 };
 
 struct lambertian : public material {
 	vec3 albedo;
 	inline lambertian(vec3 color = vec3{1.0, 0.0, 0.0}) : albedo(color) {}
-	virtual bool scatter(const ray3d &ray_in, vec3 hit_normal, vec3 hit_point, vec3 &attenuation,
-						 ray3d &scattered, random_generator &generator) const override {
-		vec3 scatter_direction = hit_normal + generator.random_unit_vec3();
+	inline virtual bool scatter(const ray3d &ray_in, const hit_record &record, vec3 &attenuation,
+								ray3d &scattered, random_generator &generator) const override {
+		vec3 scatter_direction = record.normal + generator.random_unit_vec3();
 		if (near_zero(scatter_direction)) {
-			scatter_direction = hit_normal;
+			scatter_direction = record.normal;
 		}
-		scattered = ray3d(hit_point, scatter_direction);
+		scattered = ray3d(record.point, scatter_direction);
 		attenuation = albedo;
+		return true;
+	}
+};
+
+struct dielectric : public material {
+	float refraction_index;
+	inline dielectric(float refraction_index) : refraction_index(refraction_index) {}
+	inline virtual bool scatter(const ray3d &ray_in, const hit_record &record, vec3 &attenuation,
+								ray3d &scattered, random_generator &generator) const override {
+		attenuation = vec3(1.0, 1.0, 1.0);
+		float ri = record.front_facing ? (1.0 / refraction_index) : refraction_index;
+		vec3 unit_direction = normalize(ray_in.direction);
+		double cos_theta = min(dot(-unit_direction, record.normal), 1.0f);
+		double sin_theta = sqrt(1.0 - cos_theta * cos_theta);
+		bool cannot_refract = ri * sin_theta > 1.0;
+		vec3 direction;
+		if (cannot_refract) {
+			direction = reflect(unit_direction, record.normal);
+		} else {
+			direction = refract(unit_direction, record.normal, ri);
+		}
+		scattered = ray3d(record.point, direction);
 		return true;
 	}
 };
