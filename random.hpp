@@ -20,6 +20,7 @@ struct random_generator {
 		return vec3(random_float(min_val, max_val), random_float(min_val, max_val),
 					random_float(min_val, max_val));
 	}
+	inline vec3 random_color() { return vec3(random_float(), random_float(), random_float()); }
 	inline vec3 random_unit_vec3() {
 		// Archimedes's Hat-Box Theorem
 		float z = random_float(-1.0, 1.0);
@@ -34,5 +35,10 @@ struct random_generator {
 		float r = sqrt(1.0 - z * z);
 		vec3 v(r * cos(a), r * sin(a), z);
 		return dot(v, normal) > 0.0 ? v : -v;
+	}
+	inline vec3 random_in_unit_disk() {
+		float r = sqrt(random_float());
+		float a = random_float(0, 2.0 * std::numbers::pi);
+		return vec3(r * cos(a), r * sin(a), 0.0);
 	}
 };

@@ -43,16 +43,21 @@ struct lambertian : public material {
 struct dielectric : public material {
 	float refraction_index;
 	inline dielectric(float refraction_index) : refraction_index(refraction_index) {}
+	[[gnu::always_inline]] static float reflectance(float cosine, float refraction_index) {
+		// Use Schlick's approximation for reflectance
+		float r0 = (1 - refraction_index) / (1 + refraction_index);
+		r0 = r0 * r0;
+		return r0 + (1 - r0) * std::pow((1 - cosine), 5);
+	}
 	inline virtual bool scatter(const ray3d &ray_in, const hit_record &record, vec3 &attenuation,
 								ray3d &scattered, random_generator &generator) const override {
 		attenuation = vec3(1.0, 1.0, 1.0);
 		float ri = record.front_facing ? (1.0 / refraction_index) : refraction_index;
 		vec3 unit_direction = normalize(ray_in.direction);
-		double cos_theta = min(dot(-unit_direction, record.normal), 1.0f);
-		double sin_theta = sqrt(1.0 - cos_theta * cos_theta);
-		bool cannot_refract = ri * sin_theta > 1.0;
+		float cos_theta = min(dot(-unit_direction, record.normal), 1.0f);
+		float sin_theta = sqrt(1.0 - cos_theta * cos_theta);
 		vec3 direction;
-		if (cannot_refract) {
+		if (ri * sin_theta > 1.0 || reflectance(cos_theta, ri) > generator.random_float()) {
 			direction = reflect(unit_direction, record.normal);
 		} else {
 			direction = refract(unit_direction, record.normal, ri);
