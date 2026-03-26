@@ -4,4 +4,4 @@ import sys
 argv = sys.orig_argv
 name = argv[2].removesuffix('.cpp')
 os.system(
-    f'g++ {name}.cpp -std=c++20 -lfmt -fopenmp `sdl2-config --cflags --libs` -g -o build/{name} && build/{name}' if len(argv) > 2 else '')
+    f'g++ {name}.cpp -std=c++20 -lfmt -fopenmp `sdl2-config --cflags --libs` -O3 -ffast-math -march=native -finline-functions -s -o build/{name} && build/{name}' if len(argv) > 2 else '')

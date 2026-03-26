@@ -9,8 +9,8 @@ int main() {
 	hittable_list<sphere3d> world;
 	auto ground_material = std::make_shared<lambertian>(vec3(0.5, 0.5, 0.5));
 	world.add(sphere3d(vec3(0, -1000, 0), 1000, ground_material));
-	for (int a = -3; a < 3; a++) {
-		for (int b = -3; b < 3; b++) {
+	for (int a = -5; a < 5; a++) {
+		for (int b = -5; b < 5; b++) {
 			auto choose_mat = generator.random_float();
 			vec3 center(a + 0.9 * generator.random_float(), 0.2,
 						b + 0.9 * generator.random_float());
