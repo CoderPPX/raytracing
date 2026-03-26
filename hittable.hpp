@@ -25,39 +25,6 @@ concept hittable = requires(T t, const ray3d &r, interval t_interval, hit_record
 	{ t.hit(r, t_interval, rec) } -> std::same_as<bool>;
 };
 
-struct sphere3d {
-public:
-	vec3 center;
-	float radius;
-	std::shared_ptr<material> mat;
-
-public:
-	sphere3d(vec3 c, float r, std::shared_ptr<material> mat) : center(c), radius(r), mat(mat) {}
-	inline bool hit(const ray3d &r, interval t_interval, hit_record &rec) const {
-		vec3 oc = center - r.origin;
-		float a = dot(r.direction, r.direction);
-		float h = dot(r.direction, oc);
-		float c = dot(oc, oc) - radius * radius;
-		float delta = h * h - a * c;
-		if (delta < 0) {
-			return false;
-		}
-		float sqrtd = sqrt(delta), root = (h - sqrtd) / a;
-		if (!t_interval.surrounds(root)) {
-			root = (h + sqrtd) / a;
-			if (!t_interval.surrounds(root)) {
-				return false;
-			}
-		}
-		rec.t = root;
-		rec.point = r.at(root);
-		vec3 outward_normal = normalize(rec.point - center);
-		rec.set_face_normal(r, outward_normal);
-		rec.mat = mat;
-		return true;
-	}
-};
-
 struct plane3d {
 public:
 	vec3 center;
@@ -77,6 +44,43 @@ public:
 		rec.t = t;
 		rec.point = r.at(t);
 		rec.set_face_normal(r, normalize(normal));
+		return true;
+	}
+};
+
+struct sphere3d {
+public:
+	ray3d center;
+	float radius;
+	std::shared_ptr<material> mat;
+
+public:
+	sphere3d(vec3 center1, float r, std::shared_ptr<material> mat)
+		: center(center1, vec3(0.0)), radius(r), mat(mat) {}
+	sphere3d(vec3 center1, vec3 center2, float r, std::shared_ptr<material> mat)
+		: center(center1, center2 - center1), radius(r), mat(mat) {}
+	inline bool hit(const ray3d &r, interval t_interval, hit_record &rec) const {
+		vec3 current_center = center.at(r.time);
+		vec3 oc = current_center - r.origin;
+		float a = dot(r.direction, r.direction);
+		float h = dot(r.direction, oc);
+		float c = dot(oc, oc) - radius * radius;
+		float delta = h * h - a * c;
+		if (delta < 0) {
+			return false;
+		}
+		float sqrtd = sqrt(delta), root = (h - sqrtd) / a;
+		if (!t_interval.surrounds(root)) {
+			root = (h + sqrtd) / a;
+			if (!t_interval.surrounds(root)) {
+				return false;
+			}
+		}
+		rec.t = root;
+		rec.point = r.at(root);
+		vec3 outward_normal = normalize(rec.point - current_center);
+		rec.set_face_normal(r, outward_normal);
+		rec.mat = mat;
 		return true;
 	}
 };

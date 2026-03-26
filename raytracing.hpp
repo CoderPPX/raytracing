@@ -66,8 +66,10 @@ inline vec3 reflect_vec3(vec3 v, vec3 n) { return v - 2 * dot(v, n) * n; }
 
 struct ray3d {
 	vec3 origin, direction;
+	float time;
 	inline ray3d() = default;
-	inline ray3d(vec3 orig, vec3 dir) : origin(orig), direction(dir) {}
+	inline ray3d(vec3 orig, vec3 dir, float time_ = 0.0)
+		: origin(orig), direction(dir), time(time_) {}
 	inline vec3 at(float t) const { return origin + t * direction; }
 };
 
@@ -84,5 +86,3 @@ struct interval {
 		return x > max_val ? max_val : (x < min_val ? min_val : x);
 	}
 };
-const interval interval::empty = interval(+FLT_MAX, -FLT_MAX);
-const interval interval::universe = interval(-FLT_MAX, +FLT_MAX);

@@ -19,7 +19,7 @@ struct metal : public material {
 								ray3d &scattered, random_generator &generator) const override {
 		vec3 reflected = reflect(ray_in.direction, record.normal);
 		reflected = normalize(reflected) + (fuzz_factor * generator.random_unit_vec3());
-		scattered = ray3d(record.point, reflected);
+		scattered = ray3d(record.point, reflected, ray_in.time);
 		attenuation = albedo;
 		return dot(reflected, record.normal) > 0.0;
 	}
@@ -34,7 +34,7 @@ struct lambertian : public material {
 		if (near_zero(scatter_direction)) {
 			scatter_direction = record.normal;
 		}
-		scattered = ray3d(record.point, scatter_direction);
+		scattered = ray3d(record.point, scatter_direction, ray_in.time);
 		attenuation = albedo;
 		return true;
 	}
@@ -62,7 +62,7 @@ struct dielectric : public material {
 		} else {
 			direction = refract(unit_direction, record.normal, ri);
 		}
-		scattered = ray3d(record.point, direction);
+		scattered = ray3d(record.point, direction, ray_in.time);
 		return true;
 	}
 };

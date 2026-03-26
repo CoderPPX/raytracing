@@ -24,33 +24,42 @@ protected:
 		vec3 p = generator.random_in_unit_disk();
 		return center + p[0] * defocus_disk_u + p[1] * defocus_disk_v;
 	}
-	inline ray3d random_ray_sample(int x, int y, random_generator &generator) const {
+	inline ray3d random_ray_sample(int x, int y, interval time_interval,
+								   random_generator &generator) const {
 		float dx = generator.random_float() - 0.5;
 		float dy = generator.random_float() - 0.5;
 		vec3 pixel_sample = pixel00_loc + ((x + dx) * pixel_du) + ((y + dy) * pixel_dv);
 		vec3 ray_origin = (defocus_angle <= 0.0) ? center : defocus_disk_sample(generator);
-		return ray3d(ray_origin, pixel_sample - ray_origin);
+		return ray3d(ray_origin, pixel_sample - ray_origin, generator.random_float(time_interval));
 	}
 	template <hittable T1, typename... Ts>
-	static vec3 ray_color(const ray3d &ray, random_generator &generator, int recursion_depth,
-						  const T1 &t1, const Ts &...ts) {
-		constexpr int max_recursion_depth = 32;
+	inline static vec3 ray_color(const ray3d &ray, random_generator &generator, const T1 &t1,
+								 const Ts &...ts) {
+		constexpr int max_depth = 32;
 		hit_record record;
-		if (recursion_depth >= max_recursion_depth) {
-			return vec3(0.0);
-		}
-		if (hit(ray, interval(0.001, +INFINITY), record, t1, ts...)) {
-			ray3d scattered;
-			vec3 attenuation;
-			if (record.mat->scatter(ray, record, attenuation, scattered, generator)) {
-				return attenuation *
-					   ray_color(scattered, generator, recursion_depth + 1, t1, ts...);
+		ray3d current_ray = ray, scattered;
+		vec3 throughput(1.0), attenuation;
+		for (int i = 0; i < max_depth; ++i) {
+			if (hit(current_ray, interval(0.001, +INFINITY), record, t1, ts...)) {
+				float max_v = max(max(throughput.x, throughput.y), throughput.z);
+				if (i > 5) {
+					if (generator.random_float() > max_v) {
+						break;
+					}
+					throughput /= max_v;
+				}
+				if (record.mat->scatter(current_ray, record, attenuation, scattered, generator)) {
+					throughput *= attenuation;
+					current_ray = scattered;
+					continue;
+				}
+				return vec3(0.0);
 			}
-			return vec3(0.0);
+			vec3 unit_direction = normalize(current_ray.direction);
+			float a = 0.5 * (unit_direction.y + 1.0);
+			return throughput * mix(vec3(1.0, 1.0, 1.0), vec3(0.5, 0.7, 1.0), a);
 		}
-		vec3 unit_direction = normalize(ray.direction);
-		float a = 0.5 * (unit_direction.y + 1.0);
-		return mix(vec3(1.0, 1.0, 1.0), vec3(0.5, 0.7, 1.0), a);
+		return vec3(0.0);
 	}
 
 public:
@@ -83,7 +92,7 @@ public:
 			display_string.reserve(200);
 			while (!render_done) {
 				int64_t count = pixel_counter.load(std::memory_order_relaxed);
-				float progress = std::min(1.0f, (float)count / total_pixels); // 防止微小溢出
+				float progress = min(1.0f, (float)count / total_pixels);
 				int bar_width = 40;
 				int pos = (int)(bar_width * progress);
 				auto now = std::chrono::steady_clock::now();
@@ -100,7 +109,6 @@ public:
 					else
 						display_string += ' ';
 				}
-				// \033[K 清除行尾残余
 				fmt::format_to(std::back_inserter(display_string), "] {:3d}% | ETA: {:d}s \033[K",
 							   (int)(progress * 100), eta);
 				fmt::print("{}", display_string);
@@ -114,8 +122,8 @@ public:
 				static thread_local random_generator generator;
 				vec3 pixel_color(0.0);
 				for (int i = 0; i < samples_per_pixel; ++i) {
-					ray3d ray = random_ray_sample(x, y, generator);
-					pixel_color += ray_color(ray, generator, 0, t1, ts...);
+					ray3d ray = random_ray_sample(x, y, interval(0.0, 1.0), generator);
+					pixel_color += ray_color(ray, generator, t1, ts...);
 				}
 				image.write_vec3(x, y, pixel_color / (float)samples_per_pixel);
 				pixel_counter.fetch_add(1, std::memory_order_relaxed);
