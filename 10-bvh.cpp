@@ -19,9 +19,8 @@ int main() {
 				if (choose_mat < 0.8) {
 					// diffuse
 					auto albedo = generator.random_color();
-					auto center2 = center + vec3(0, generator.random_float(0, 0.5), 0);
 					sphere_material = std::make_shared<lambertian>(albedo);
-					world->add(std::make_shared<sphere3d>(center, center2, 0.2, sphere_material));
+					world->add(std::make_shared<sphere3d>(center, 0.2, sphere_material));
 				} else if (choose_mat < 0.95) {
 					// metal
 					auto albedo = generator.random_color();

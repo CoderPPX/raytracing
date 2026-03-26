@@ -32,15 +32,14 @@ protected:
 		vec3 ray_origin = (defocus_angle <= 0.0) ? center : defocus_disk_sample(generator);
 		return ray3d(ray_origin, pixel_sample - ray_origin, generator.random_float(time_interval));
 	}
-	template <hittable T1, typename... Ts>
-	inline static vec3 ray_color(const ray3d &ray, random_generator &generator, const T1 &t1,
-								 const Ts &...ts) {
+	inline static vec3 ray_color(const ray3d &ray, random_generator &generator,
+								 hittable_ptr object) {
 		constexpr int max_depth = 32;
 		hit_record record;
 		ray3d current_ray = ray, scattered;
 		vec3 throughput(1.0), attenuation;
 		for (int i = 0; i < max_depth; ++i) {
-			if (hit(current_ray, interval(0.001, +INFINITY), record, t1, ts...)) {
+			if (object->hit(current_ray, interval(0.001, +1e36), record)) {
 				float max_v = max(max(throughput.x, throughput.y), throughput.z);
 				if (i > 5) {
 					if (generator.random_float() > max_v) {
@@ -82,7 +81,7 @@ public:
 		defocus_disk_u = u * defocus_radius;
 		defocus_disk_v = v * defocus_radius;
 	}
-	template <hittable T1, typename... Ts> inline void render(const T1 &t1, const Ts &...ts) {
+	inline void render(hittable_ptr object) {
 		std::atomic_bool render_done = false;
 		std::atomic_int64_t pixel_counter = 0;
 		std::thread display_thread([&] {
@@ -123,7 +122,7 @@ public:
 				vec3 pixel_color(0.0);
 				for (int i = 0; i < samples_per_pixel; ++i) {
 					ray3d ray = random_ray_sample(x, y, interval(0.0, 1.0), generator);
-					pixel_color += ray_color(ray, generator, t1, ts...);
+					pixel_color += ray_color(ray, generator, object);
 				}
 				image.write_vec3(x, y, pixel_color / (float)samples_per_pixel);
 				pixel_counter.fetch_add(1, std::memory_order_relaxed);

@@ -35,7 +35,7 @@ int main() {
 			auto ray_direction = pixel_center - camera_center;
 			ray3d ray(camera_center, ray_direction);
 			hit_record record;
-			bool hitted = hit(ray, interval(0.0, +INFINITY), record, sphere, plane);
+			bool hitted = hit(ray, interval(0.0, +1e36), record, sphere, plane);
 			vec3 pixel_color = hitted ? normal_to_color(record.normal) : ray_color(ray);
 			image.write_vec3(x, y, pixel_color);
 		}

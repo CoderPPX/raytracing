@@ -41,4 +41,7 @@ struct random_generator {
 		float a = random_float(0, 2.0 * std::numbers::pi);
 		return vec3(r * cos(a), r * sin(a), 0.0);
 	}
+	inline int random_int(int min_val, int max_val) {
+		return int(random_float(min_val, max_val + 1));
+	}
 };

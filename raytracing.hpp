@@ -62,7 +62,6 @@ template <typename glm_vec> inline auto length_square(const glm_vec &v) { return
 template <typename glm_vec> inline bool near_zero(const glm_vec &v) {
 	return length_square(v) < 1e-10;
 }
-inline vec3 reflect_vec3(vec3 v, vec3 n) { return v - 2 * dot(v, n) * n; }
 
 struct ray3d {
 	vec3 origin, direction;
@@ -74,15 +73,21 @@ struct ray3d {
 };
 
 struct interval {
-	static const interval empty, universe;
 	float min_val, max_val;
 	// Default interval is empty
-	interval(float min_val = +FLT_MAX, float max_val = -FLT_MAX)
+	inline interval(float min_val = +1e36, float max_val = -1e36)
 		: min_val(min_val), max_val(max_val) {}
+	// union of a, b
+	inline interval(interval a, interval b)
+		: min_val(min(a.min_val, b.min_val)), max_val(max(a.max_val, b.max_val)) {}
 	inline float size() const { return max_val - min_val; }
 	inline bool contains(float x) const { return min_val <= x && x <= max_val; }
 	inline bool surrounds(float x) const { return min_val < x && x < max_val; }
 	inline float clamp(float x) const {
 		return x > max_val ? max_val : (x < min_val ? min_val : x);
+	}
+	inline interval expand(float delta) {
+		float padding = delta / 2.0;
+		return interval(min_val - padding, max_val + padding);
 	}
 };

@@ -1,7 +1,7 @@
 #pragma once
 #include <memory>
 #include <concepts>
-#include "raytracing.hpp"
+#include "aabb.hpp"
 
 struct material;
 struct hit_record {
@@ -20,46 +20,33 @@ struct hit_record {
 // Include here to avoid circular dependency
 #include "material.hpp"
 
-template <typename T>
-concept hittable = requires(T t, const ray3d &r, interval t_interval, hit_record &rec) {
-	{ t.hit(r, t_interval, rec) } -> std::same_as<bool>;
+struct hittable {
+	inline virtual aabb bounding_box() const = 0;
+	inline virtual bool hit(const ray3d &r, interval t_interval, hit_record &rec) const = 0;
 };
+using hittable_ptr = std::shared_ptr<hittable>;
 
-struct plane3d {
+struct sphere3d : public hittable {
 public:
-	vec3 center;
-	vec3 normal;
-
-public:
-	plane3d(vec3 c, vec3 n = vec3(0.0, 1.0, 0.0)) : center(c), normal(n) {}
-	inline bool hit(const ray3d &r, interval t_interval, hit_record &rec) const {
-		float a = dot(normal, r.direction);
-		if (a == 0.0) {
-			return false;
-		}
-		float t = dot(normal, center - r.origin) / a;
-		if (!t_interval.surrounds(t)) {
-			return false;
-		}
-		rec.t = t;
-		rec.point = r.at(t);
-		rec.set_face_normal(r, normalize(normal));
-		return true;
-	}
-};
-
-struct sphere3d {
-public:
+	aabb bbox;
 	ray3d center;
 	float radius;
 	std::shared_ptr<material> mat;
 
 public:
-	sphere3d(vec3 center1, float r, std::shared_ptr<material> mat)
-		: center(center1, vec3(0.0)), radius(r), mat(mat) {}
+	sphere3d(vec3 static_center, float r, std::shared_ptr<material> mat)
+		: center(static_center, vec3(0.0)), radius(max(r, 0.f)), mat(mat) {
+		vec3 rvec(radius, radius, radius);
+		bbox = aabb(static_center - rvec, static_center + rvec);
+	}
 	sphere3d(vec3 center1, vec3 center2, float r, std::shared_ptr<material> mat)
-		: center(center1, center2 - center1), radius(r), mat(mat) {}
-	inline bool hit(const ray3d &r, interval t_interval, hit_record &rec) const {
+		: center(center1, center2 - center1), radius(r), mat(mat) {
+		vec3 rvec(radius, radius, radius);
+		aabb box1(center1 - rvec, center1 + rvec);
+		aabb box2(center2 - rvec, center2 + rvec);
+		bbox = aabb(box1, box2);
+	}
+	inline bool hit(const ray3d &r, interval t_interval, hit_record &rec) const override {
 		vec3 current_center = center.at(r.time);
 		vec3 oc = current_center - r.origin;
 		float a = dot(r.direction, r.direction);
@@ -83,21 +70,32 @@ public:
 		rec.mat = mat;
 		return true;
 	}
+	inline aabb bounding_box() const override { return bbox; };
 };
 
-template <hittable T> struct hittable_list {
-	std::vector<T> objects;
+struct hittable_list : public hittable {
+public:
+	aabb bbox;
+	std::vector<hittable_ptr> objects;
+
+public:
 	hittable_list() = default;
-	hittable_list(std::initializer_list<T> hittables) : objects(hittables) {}
+	hittable_list(std::initializer_list<hittable_ptr> hittables) : objects(hittables) {
+		for (auto &object : hittables) {
+			bbox = aabb(bbox, object->bounding_box());
+		}
+	}
 	inline void clear() { objects.clear(); }
-	inline void add(const T &object) { objects.push_back(object); }
-	inline void add(T &&object) { objects.push_back(std::move(object)); }
-	inline bool hit(const ray3d &r, interval ray_t, hit_record &rec) const {
+	inline void add(hittable_ptr object) {
+		objects.push_back(object);
+		bbox = aabb(bbox, object->bounding_box());
+	}
+	inline bool hit(const ray3d &r, interval ray_t, hit_record &rec) const override {
 		hit_record temp_rec;
 		bool hit_anything = false;
 		float closest_so_far = ray_t.max_val;
 		for (const auto &object : objects) {
-			if (object.hit(r, interval(ray_t.min_val, closest_so_far), temp_rec)) {
+			if (object->hit(r, interval(ray_t.min_val, closest_so_far), temp_rec)) {
 				hit_anything = true;
 				closest_so_far = temp_rec.t;
 				rec = temp_rec;
@@ -105,22 +103,5 @@ template <hittable T> struct hittable_list {
 		}
 		return hit_anything;
 	}
+	inline aabb bounding_box() const override { return bbox; }
 };
-
-inline bool hit(const ray3d &r, interval t_interval, hit_record &rec) { return false; }
-template <hittable T1, typename... Ts>
-inline bool hit(const ray3d &r, interval t_interval, hit_record &rec, const T1 &t1,
-				const Ts &...ts) {
-	bool hit_anything = false;
-	float closest_so_far = t_interval.max_val;
-	if (t1.hit(r, t_interval, rec)) {
-		hit_anything = true;
-		closest_so_far = rec.t;
-	}
-	if constexpr (sizeof...(ts) > 0) {
-		if (hit(r, interval(t_interval.min_val, closest_so_far), rec, ts...)) {
-			hit_anything = true;
-		}
-	}
-	return hit_anything;
-}
