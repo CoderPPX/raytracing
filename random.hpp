@@ -15,6 +15,13 @@ struct random_generator {
 		return min_val + (max_val - min_val) * random_float();
 	}
 	inline float random_float(interval i) { return i.min_val + i.size() * random_float(); }
+	inline std::vector<float> random_floats(int n, float min_val = 0, float max_val = 1) {
+		std::vector<float> result((size_t)n);
+		for (int i = 0; i < n; ++i) {
+			result[i] = random_float(min_val, max_val);
+		}
+		return std::move(result);
+	}
 	inline vec3 random_vec3() { return vec3(random_float(), random_float(), random_float()); }
 	inline vec3 random_vec3(float min_val, float max_val) {
 		return vec3(random_float(min_val, max_val), random_float(min_val, max_val),

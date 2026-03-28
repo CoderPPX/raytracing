@@ -1,5 +1,6 @@
 #pragma once
 #include "random.hpp"
+#include "texture.hpp"
 
 struct hit_record;
 struct material {
@@ -26,8 +27,10 @@ struct metal : public material {
 };
 
 struct lambertian : public material {
-	vec3 albedo;
-	inline lambertian(vec3 color = vec3{1.0, 0.0, 0.0}) : albedo(color) {}
+	texture_ptr tex;
+	inline lambertian(vec3 color = vec3{1.0, 0.0, 0.0})
+		: tex(std::make_shared<solid_color_texture>(color)) {}
+	inline lambertian(texture_ptr tex) : tex(tex) {}
 	inline virtual bool scatter(const ray3d &ray_in, const hit_record &record, vec3 &attenuation,
 								ray3d &scattered, random_generator &generator) const override {
 		vec3 scatter_direction = record.normal + generator.random_unit_vec3();
@@ -35,7 +38,7 @@ struct lambertian : public material {
 			scatter_direction = record.normal;
 		}
 		scattered = ray3d(record.point, scatter_direction, ray_in.time);
-		attenuation = albedo;
+		attenuation = tex->color(record.tex_coord, record.point);
 		return true;
 	}
 };

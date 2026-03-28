@@ -9,6 +9,7 @@ struct hit_record {
 	int front_facing; // 0 for false, 1 for true
 	vec3 normal;
 	float t;
+	vec2 tex_coord;
 	std::shared_ptr<material> mat;
 	// Assume outward_normal to be a unit vector
 	inline void set_face_normal(const ray3d &r, vec3 outward_normal) {
@@ -46,6 +47,18 @@ public:
 		aabb box2(center2 - rvec, center2 + rvec);
 		bbox = aabb(box1, box2);
 	}
+	// Asuume xyz is normalized
+	static inline vec2 sphere_xyz_to_uv(vec3 xyz) {
+		// p: a given point on the sphere of radius one, centered at the origin.
+		// u: returned value [0,1] of angle around the Y axis from X=-1.
+		// v: returned value [0,1] of angle from Y=-1 to Y=+1.
+		//     <1 0 0> yields <0.50 0.50>       <-1  0  0> yields <0.00 0.50>
+		//     <0 1 0> yields <0.50 1.00>       < 0 -1  0> yields <0.50 0.00>
+		//     <0 0 1> yields <0.25 0.50>       < 0  0 -1> yields <0.75 0.50>
+		auto theta = std::acos(-xyz.y);
+		auto phi = std::atan2(-xyz.z, xyz.x) + M_PI;
+		return vec2(phi / (2.0 * M_PI), theta / M_PI);
+	}
 	inline bool hit(const ray3d &r, interval t_interval, hit_record &rec) const override {
 		vec3 current_center = center.at(r.time);
 		vec3 oc = current_center - r.origin;
@@ -68,6 +81,7 @@ public:
 		vec3 outward_normal = normalize(rec.point - current_center);
 		rec.set_face_normal(r, outward_normal);
 		rec.mat = mat;
+		rec.tex_coord = sphere_xyz_to_uv(outward_normal);
 		return true;
 	}
 	inline aabb bounding_box() const override { return bbox; };
