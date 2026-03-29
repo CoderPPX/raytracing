@@ -1,6 +1,5 @@
 #pragma once
 #include <memory>
-#include <concepts>
 #include "aabb.hpp"
 
 struct material;
@@ -87,6 +86,101 @@ public:
 	inline aabb bounding_box() const override { return bbox; };
 };
 
+struct quadrilateral : public hittable {
+public:
+	aabb bbox;
+	vec3 q, u, v; // starting point and two edges
+	std::shared_ptr<material> mat;
+
+protected:
+	vec3 n, w;
+
+public:
+	inline quadrilateral(vec3 q_, vec3 u_, vec3 v_,
+						 std::shared_ptr<material> mat_ = std::make_shared<lambertian>(vec3(0.8)))
+		: q(q_), u(u_), v(v_), n(cross(u, v)), mat(mat_) {
+		float len = length_square(n);
+		w = n / len;
+		n /= sqrt(len);
+		vec3 pts[4] = {q, q + u, q + v, q + u + v};
+		for (auto &pt : pts) {
+			bbox.x.extend_with(pt.x);
+			bbox.y.extend_with(pt.y);
+			bbox.z.extend_with(pt.z);
+		}
+		bbox.pad_to_minimums();
+	}
+	inline aabb bounding_box() const override { return bbox; }
+	inline bool hit(const ray3d &r, interval ray_t, hit_record &record) const override {
+		float denom = dot(n, r.direction);
+		// Notes: 忘记abs
+		if (abs(denom) < 1e-8) {
+			return false;
+		}
+		float t = dot(n, q - r.origin) / denom;
+		if (!ray_t.contains(t)) {
+			return false;
+		}
+		vec3 p = r.at(t), p0 = p - q;
+		float t1 = dot(w, cross(p0, v)), t2 = dot(w, cross(u, p0));
+		interval unit(0, 1);
+		if (!unit.contains(t1) || !unit.contains(t2)) {
+			return false;
+		}
+		record.t = t;
+		record.point = p;
+		record.mat = mat;
+		record.tex_coord = vec2(t1, t2);
+		// Notes: n必须是单位向量
+		record.set_face_normal(r, n);
+		return true;
+	}
+};
+
+struct triangle : public hittable {
+public:
+	aabb bbox; // TBD
+	vec3 v0, u, v, n, w;
+	std::shared_ptr<material> mat;
+
+public:
+	inline triangle(vec3 p1, vec3 p2, vec3 p3,
+					std::shared_ptr<material> mat_ = std::make_shared<lambertian>(vec3(0.8)))
+		: v0(p1), u(p2 - p1), v(p3 - p1), n(cross(u, v)), mat(mat_) {
+		float len = length_square(n);
+		w = n / len;
+		n /= sqrt(len);
+	}
+	inline aabb bounding_box() const override { return bbox; }
+	inline bool hit(const ray3d &r, interval ray_t, hit_record &rec) const override {
+		vec3 edge1 = u; // V1 - V0
+		vec3 edge2 = v; // V2 - V0
+		vec3 pvec = cross(r.direction, edge2);
+		float det = dot(edge1, pvec);
+		// 如果 det 接近 0，说明光线与三角形平面平行
+		if (std::abs(det) < 1e-8)
+			return false;
+		float inv_det = 1.0f / det;
+		vec3 tvec = r.origin - v0;
+		float u_coord = dot(tvec, pvec) * inv_det;
+		if (u_coord < 0 || u_coord > 1)
+			return false;
+		vec3 qvec = cross(tvec, edge1);
+		float v_coord = dot(r.direction, qvec) * inv_det;
+		if (v_coord < 0 || u_coord + v_coord > 1)
+			return false;
+		float t = dot(edge2, qvec) * inv_det;
+		if (!ray_t.contains(t))
+			return false;
+		rec.t = t;
+		rec.point = r.at(t);
+		rec.set_face_normal(r, n); // n 依然建议预计算并归一化
+		rec.mat = mat;
+		rec.tex_coord = vec2(u_coord, v_coord);
+		return true;
+	}
+};
+
 struct hittable_list : public hittable {
 public:
 	aabb bbox;
@@ -118,4 +212,23 @@ public:
 		return hit_anything;
 	}
 	inline aabb bounding_box() const override { return bbox; }
+};
+
+struct box3d : public hittable_list {
+	inline box3d(vec3 v1, vec3 v2, std::shared_ptr<material> mat) {
+		vec3 min_v = min(v1, v2), max_v = max(v1, v2);
+		auto dx = vec3(max_v.x - min_v.x, 0, 0);
+		auto dy = vec3(0, max_v.y - min_v.y, 0);
+		auto dz = vec3(0, 0, max_v.z - min_v.z);
+		this->add(
+			make_shared<quadrilateral>(vec3(min_v.x, min_v.y, max_v.z), dx, dy, mat)); // front
+		this->add(
+			make_shared<quadrilateral>(vec3(max_v.x, min_v.y, max_v.z), -dz, dy, mat)); // right
+		this->add(
+			make_shared<quadrilateral>(vec3(max_v.x, min_v.y, min_v.z), -dx, dy, mat));		 // back
+		this->add(make_shared<quadrilateral>(vec3(min_v.x, min_v.y, min_v.z), dz, dy, mat)); // left
+		this->add(make_shared<quadrilateral>(vec3(min_v.x, max_v.y, max_v.z), dx, -dz, mat)); // top
+		this->add(
+			make_shared<quadrilateral>(vec3(min_v.x, min_v.y, min_v.z), dx, dz, mat)); // bottom
+	}
 };

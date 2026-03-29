@@ -8,6 +8,7 @@ struct material {
 						 ray3d &scattered, random_generator &generator) const {
 		return false;
 	};
+	virtual vec3 emitted(vec2 uv, vec3 p) const { return vec3(0.0); }
 	virtual ~material() = default;
 };
 
@@ -68,4 +69,11 @@ struct dielectric : public material {
 		scattered = ray3d(record.point, direction, ray_in.time);
 		return true;
 	}
+};
+
+struct diffuse_light : public material {
+	std::shared_ptr<texture> tex;
+	inline diffuse_light(std::shared_ptr<texture> tex) : tex(tex) {}
+	inline diffuse_light(vec3 emit) : tex(std::make_shared<solid_color_texture>(emit)) {}
+	inline vec3 emitted(vec2 uv, vec3 p) const override { return tex->color(uv, p); }
 };

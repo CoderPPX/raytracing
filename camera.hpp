@@ -12,6 +12,7 @@ public:
 	float fov = radians(90.f);
 	float defocus_angle = radians(0.0), focus_dist = 10.0;
 	int samples_per_pixel = 16, max_depth = 32;
+	vec3 background_color{0.70, 0.80, 1.00};
 
 protected:
 	vec3 u, v, w; // Camera frame basis vectors
@@ -32,33 +33,38 @@ protected:
 		vec3 ray_origin = (defocus_angle <= 0.0) ? center : defocus_disk_sample(generator);
 		return ray3d(ray_origin, pixel_sample - ray_origin, generator.random_float(time_interval));
 	}
-	inline static vec3 ray_color(const ray3d &ray, random_generator &generator,
-								 hittable_ptr object) {
+	inline vec3 ray_color(const ray3d &ray, random_generator &generator, hittable_ptr object) {
 		constexpr int max_depth = 32;
-		hit_record record;
-		ray3d current_ray = ray, scattered;
-		vec3 throughput(1.0), attenuation;
+		ray3d current_ray = ray, scattered_ray;
+		vec3 total_radiance(0.0), throughput(1.0), attenuation;
 		for (int i = 0; i < max_depth; ++i) {
-			if (object->hit(current_ray, interval(0.001, +1e36), record)) {
-				float max_v = max(max(throughput.x, throughput.y), throughput.z);
-				if (i > 5) {
-					if (generator.random_float() > max_v) {
-						break;
-					}
-					throughput /= max_v;
-				}
-				if (record.mat->scatter(current_ray, record, attenuation, scattered, generator)) {
-					throughput *= attenuation;
-					current_ray = scattered;
-					continue;
-				}
-				return vec3(0.0);
+			hit_record record;
+			// 使用 0.001 防止自相交 (Shadow Acne)
+			if (!object->hit(current_ray, interval(0.001, 1e36), record)) {
+				// 没击中物体，返回背景色并结束
+				total_radiance += throughput * background_color;
+				break;
 			}
-			vec3 unit_direction = normalize(current_ray.direction);
-			float a = 0.5 * (unit_direction.y + 1.0);
-			return throughput * mix(vec3(1.0, 1.0, 1.0), vec3(0.5, 0.7, 1.0), a);
+			vec3 emitted = record.mat->emitted(record.tex_coord, record.point);
+			// 1. 累加当前物体的自发光
+			total_radiance += throughput * emitted;
+			// 2. 尝试散射
+			if (record.mat->scatter(current_ray, record, attenuation, scattered_ray, generator)) {
+				throughput *= attenuation;
+				current_ray = scattered_ray;
+			} else {
+				// 物体不散射（完全吸收），结束路径
+				break;
+			}
+			// 3. 俄罗斯轮盘赌 (Russian Roulette)
+			if (i > 5) {
+				float p = max(throughput.x, max(throughput.y, throughput.z));
+				if (generator.random_float() > p)
+					break;
+				throughput /= p;
+			}
 		}
-		return vec3(0.0);
+		return total_radiance;
 	}
 
 public:

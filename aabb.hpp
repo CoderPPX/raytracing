@@ -8,7 +8,9 @@ struct aabb {
 		};
 		interval xyz[3];
 	};
-	inline aabb(interval x = {}, interval y = {}, interval z = {}) : x(x), y(y), z(z) {}
+	inline aabb(interval x = {}, interval y = {}, interval z = {}) : x(x), y(y), z(z) {
+		pad_to_minimums();
+	}
 	inline aabb(vec3 a, vec3 b) {
 		vec3 min_vec = min(a, b), max_vec = max(a, b);
 		x = interval(min_vec.x, max_vec.x);
@@ -49,5 +51,17 @@ struct aabb {
 			}
 		}
 		return true;
+	}
+	inline void pad_to_minimums() {
+		constexpr float delta = 0.0001;
+		if (x.size() < delta) {
+			x.expand(delta);
+		}
+		if (y.size() < delta) {
+			y.expand(delta);
+		}
+		if (z.size() < delta) {
+			z.expand(delta);
+		}
 	}
 };

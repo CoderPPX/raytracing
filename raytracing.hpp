@@ -90,4 +90,12 @@ struct interval {
 		float padding = delta / 2.0;
 		return interval(min_val - padding, max_val + padding);
 	}
+	inline void extend_with(float x) {
+		if (min_val > x) {
+			min_val = x;
+		}
+		if (max_val < x) {
+			max_val = x;
+		}
+	}
 };
