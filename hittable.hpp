@@ -22,7 +22,8 @@ struct hit_record {
 
 struct hittable {
 	inline virtual aabb bounding_box() const = 0;
-	inline virtual bool hit(const ray3d &r, interval t_interval, hit_record &rec) const = 0;
+	inline virtual bool hit(const ray3d &r, interval t_interval, hit_record &rec,
+							random_generator &generator) const = 0;
 };
 using hittable_ptr = std::shared_ptr<hittable>;
 
@@ -58,7 +59,8 @@ public:
 		auto phi = std::atan2(-xyz.z, xyz.x) + M_PI;
 		return vec2(phi / (2.0 * M_PI), theta / M_PI);
 	}
-	inline bool hit(const ray3d &r, interval t_interval, hit_record &rec) const override {
+	inline bool hit(const ray3d &r, interval t_interval, hit_record &rec,
+					random_generator &) const override {
 		vec3 current_center = center.at(r.time);
 		vec3 oc = current_center - r.origin;
 		float a = dot(r.direction, r.direction);
@@ -111,7 +113,8 @@ public:
 		bbox.pad_to_minimums();
 	}
 	inline aabb bounding_box() const override { return bbox; }
-	inline bool hit(const ray3d &r, interval ray_t, hit_record &record) const override {
+	inline bool hit(const ray3d &r, interval ray_t, hit_record &record,
+					random_generator &generator) const override {
 		float denom = dot(n, r.direction);
 		// Notes: 忘记abs
 		if (abs(denom) < 1e-8) {
@@ -152,7 +155,8 @@ public:
 		n /= sqrt(len);
 	}
 	inline aabb bounding_box() const override { return bbox; }
-	inline bool hit(const ray3d &r, interval ray_t, hit_record &rec) const override {
+	inline bool hit(const ray3d &r, interval ray_t, hit_record &rec,
+					random_generator &generator) const override {
 		vec3 edge1 = u; // V1 - V0
 		vec3 edge2 = v; // V2 - V0
 		vec3 pvec = cross(r.direction, edge2);
@@ -198,12 +202,13 @@ public:
 		objects.push_back(object);
 		bbox = aabb(bbox, object->bounding_box());
 	}
-	inline bool hit(const ray3d &r, interval ray_t, hit_record &rec) const override {
+	inline bool hit(const ray3d &r, interval ray_t, hit_record &rec,
+					random_generator &generator) const override {
 		hit_record temp_rec;
 		bool hit_anything = false;
 		float closest_so_far = ray_t.max_val;
 		for (const auto &object : objects) {
-			if (object->hit(r, interval(ray_t.min_val, closest_so_far), temp_rec)) {
+			if (object->hit(r, interval(ray_t.min_val, closest_so_far), temp_rec, generator)) {
 				hit_anything = true;
 				closest_so_far = temp_rec.t;
 				rec = temp_rec;
@@ -231,4 +236,112 @@ struct box3d : public hittable_list {
 		this->add(
 			make_shared<quadrilateral>(vec3(min_v.x, min_v.y, min_v.z), dx, dz, mat)); // bottom
 	}
+};
+
+struct instance : public hittable {
+public:
+	aabb bbox;
+	std::shared_ptr<hittable> object;
+	std::vector<mat3> normal_matrices;
+	std::vector<mat4> inv_transforms;
+
+public:
+	instance() = default;
+	instance(std::shared_ptr<hittable> object, const std::vector<mat4> &transform_matrices = {})
+		: object(object) {
+		inv_transforms.reserve(transform_matrices.size());
+		normal_matrices.reserve(transform_matrices.size());
+		for (const auto &m : transform_matrices) {
+			inv_transforms.emplace_back(inverse(m));
+			normal_matrices.emplace_back(transpose(inverse(mat3(m))));
+		}
+	}
+	inline void add_instance(const mat4 &transform_matrix) {
+		inv_transforms.emplace_back(inverse(transform_matrix));
+		normal_matrices.emplace_back(transpose(inverse(mat3(transform_matrix))));
+	}
+	inline bool hit(const ray3d &r, interval ray_t, hit_record &rec,
+					random_generator &generator) const override {
+		hit_record temp_rec;
+		bool hit_anything = false;
+		float closest_so_far = ray_t.max_val;
+		for (size_t i = 0; i < inv_transforms.size(); ++i) {
+			ray3d local_ray(vec3(inv_transforms[i] * vec4(r.origin, 1.f)),
+							mat3(inv_transforms[i]) * r.direction);
+			if (object->hit(local_ray, interval(ray_t.min_val, closest_so_far), temp_rec,
+							generator)) {
+				hit_anything = true;
+				closest_so_far = temp_rec.t;
+				rec.t = temp_rec.t;
+				rec.mat = temp_rec.mat;
+				rec.point = r.at(rec.t);
+				rec.tex_coord = temp_rec.tex_coord;
+				rec.front_facing = temp_rec.front_facing;
+				rec.normal = normal_matrices[i] * temp_rec.normal;
+			}
+		}
+		return hit_anything;
+	}
+	// TBD
+	inline aabb bounding_box() const override { return bbox; }
+};
+
+struct volume_smoke : public hittable {
+public:
+	aabb bbox;
+	float neg_inv_density;
+	std::shared_ptr<hittable> boundary;
+	std::shared_ptr<material> phase_function;
+
+public:
+	volume_smoke(std::shared_ptr<hittable> boundary, float density, std::shared_ptr<texture> tex)
+		: boundary(boundary), neg_inv_density(-1 / density),
+		  phase_function(make_shared<isotropic>(tex)) {}
+	volume_smoke(std::shared_ptr<hittable> boundary, float density, vec3 albedo)
+		: boundary(boundary), neg_inv_density(-1 / density),
+		  phase_function(std::make_shared<isotropic>(albedo)) {}
+
+	inline bool hit(const ray3d &r, interval ray_t, hit_record &rec,
+					random_generator &generator) const override {
+		hit_record rec1, rec2;
+		if (!boundary->hit(r, interval(-1e36, +1e36), rec1, generator)) {
+			return false;
+		}
+		// Notes: 打中背面
+		if (!boundary->hit(r, interval(rec1.t + 0.0001, +1e36), rec2, generator)) {
+			return false;
+		}
+		// Notes: 确保物体有一部分在ray_t内部
+		rec1.t = max(ray_t.min_val, rec1.t);
+		rec2.t = min(ray_t.max_val, rec2.t);
+		if (rec1.t >= rec2.t) {
+			return false;
+		}
+		// Notes: t < 0 => 后面的物体物体为什么也可以?
+		// Answer: 允许光线从介质中间发出
+		rec1.t = max(rec1.t, 0.f);
+		float ray_length = length(r.direction);
+		float distance_inside_boundary = ray_length * (rec2.t - rec1.t);
+		/*
+		Notes: 将(0, 1)上均匀分布变为指数分布的trick
+		证明: 在任意dx距离内光线散射的概率为I * dx (i = intensity)
+		记光线在介质中的hit_distance为随机变量X,F(x)为X的CDF,f(x)为X的PDF
+		则F(x) = 1 - \lim_{dx\to\infty}(1 - Idx)^{\frac{x}{dx}} = 1 - e^{-Ix}
+		故f(x) = Ie^{-Ix}, 显然X ~ Exponential(I)
+		记Y = 1 - random_float(). 则Y ~ Uniform(0, 1)
+		故hit_distance = - log(random_float()) / density = F^{-1}(Y)
+		由反函数采样法可知 hit_distance ~ Exponential(I)
+		*/
+		float hit_distance = neg_inv_density * log(generator.random_float());
+		if (hit_distance > distance_inside_boundary) {
+			return false;
+		}
+		rec.t = rec1.t + hit_distance / ray_length;
+		rec.point = r.at(rec.t);
+		rec.normal = vec3(1, 0, 0); // arbitrary
+		rec.front_facing = true;	// arbitrary
+		rec.mat = phase_function;
+		return true;
+	}
+	inline aabb bounding_box() const override { return bbox; }
 };

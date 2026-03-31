@@ -77,3 +77,16 @@ struct diffuse_light : public material {
 	inline diffuse_light(vec3 emit) : tex(std::make_shared<solid_color_texture>(emit)) {}
 	inline vec3 emitted(vec2 uv, vec3 p) const override { return tex->color(uv, p); }
 };
+
+struct isotropic : public material {
+	std::shared_ptr<texture> tex;
+	isotropic(vec3 albedo) : tex(std::make_shared<solid_color_texture>(albedo)) {}
+	isotropic(std::shared_ptr<texture> tex) : tex(tex) {}
+
+	inline virtual bool scatter(const ray3d &r_in, const hit_record &rec, vec3 &attenuation,
+								ray3d &scattered, random_generator &generator) const override {
+		scattered = ray3d(rec.point, generator.random_unit_vec3(), r_in.time);
+		attenuation = tex->color(rec.tex_coord, rec.point);
+		return true;
+	}
+};

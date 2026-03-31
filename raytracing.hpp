@@ -2,6 +2,7 @@
 #include <vector>
 #include <type_traits>
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <fmt/format.h>
 using namespace glm;
 
@@ -73,6 +74,7 @@ struct ray3d {
 };
 
 struct interval {
+	// Notes: min和max的作用有哪些
 	float min_val, max_val;
 	// Default interval is empty
 	inline interval(float min_val = +1e36, float max_val = -1e36)

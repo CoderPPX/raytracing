@@ -40,7 +40,7 @@ protected:
 		for (int i = 0; i < max_depth; ++i) {
 			hit_record record;
 			// 使用 0.001 防止自相交 (Shadow Acne)
-			if (!object->hit(current_ray, interval(0.001, 1e36), record)) {
+			if (!object->hit(current_ray, interval(0.001, 1e36), record, generator)) {
 				// 没击中物体，返回背景色并结束
 				total_radiance += throughput * background_color;
 				break;
