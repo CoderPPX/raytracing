@@ -17,6 +17,8 @@ public:
 	inline bool is_leaf() const { return left == nullptr && right == nullptr; }
 	inline bool hit(const ray3d &r, interval ray_t, hit_record &rec,
 					random_generator &generator) const override;
+	inline bool hit_recursive(const ray3d &r, interval ray_t, hit_record &rec,
+							  random_generator &generator) const;
 	template <typename Iterator>
 		requires(std::random_access_iterator<Iterator> &&
 				 std::same_as<hittable_ptr, std::iter_value_t<Iterator>>)
@@ -65,8 +67,8 @@ inline void bvh_node::build_bvh(Iterator begin, Iterator end) {
 	right->build_bvh(it, temp.end());
 }
 
-inline bool bvh_node::hit(const ray3d &r, interval ray_t, hit_record &rec,
-						  random_generator &generator) const {
+inline bool bvh_node::hit_recursive(const ray3d &r, interval ray_t, hit_record &rec,
+									random_generator &generator) const {
 	if (!bbox.hit(r, ray_t)) {
 		return false;
 	}
@@ -83,14 +85,55 @@ inline bool bvh_node::hit(const ray3d &r, interval ray_t, hit_record &rec,
 		}
 		return hit_anything;
 	}
-	if (left != nullptr && left->bbox.hit(r, ray_t)) {
+	if (left != nullptr) {
 		hit_anything |= left->hit(r, ray_t, rec, generator);
 		if (hit_anything) {
 			ray_t.max_val = rec.t;
 		}
 	}
-	if (right != nullptr && right->bbox.hit(r, ray_t)) {
+	if (right != nullptr) {
 		hit_anything |= right->hit(r, ray_t, rec, generator);
+	}
+	return hit_anything;
+}
+
+inline bool bvh_node::hit(const ray3d &r, interval ray_t, hit_record &rec,
+						  random_generator &generator) const {
+	static thread_local std::array<int8_t, 64> rip_stack;
+	static thread_local std::array<const bvh_node *, 64> node_stack;
+	rip_stack.fill(0);
+	node_stack[0] = this;
+	int32_t stack_size = 1;
+	bool hit_anything = false;
+	while (stack_size != 0) {
+		auto rip = rip_stack[stack_size - 1];
+		auto node_ptr = node_stack[stack_size - 1];
+		if (!node_ptr->bbox.hit(r, ray_t)) {
+			--stack_size;
+			continue;
+		}
+		if (node_ptr->is_leaf()) {
+			auto leaf = reinterpret_cast<const bvh_leaf_node *>(node_ptr);
+			for (auto &object : leaf->objects) {
+				if (object != nullptr && object->hit(r, ray_t, rec, generator)) {
+					hit_anything = true;
+					ray_t.max_val = rec.t;
+				}
+			}
+			--stack_size;
+			continue;
+		}
+		if ((node_ptr->left != nullptr) && rip == 0) {
+			rip_stack[stack_size - 1] = 1;
+			node_stack[stack_size++] = node_ptr->left.get();
+			continue;
+		}
+		if ((node_ptr->right != nullptr) && rip <= 1) {
+			rip_stack[stack_size - 1] = 2;
+			node_stack[stack_size++] = node_ptr->right.get();
+			continue;
+		}
+		rip_stack[--stack_size] = 0;
 	}
 	return hit_anything;
 }

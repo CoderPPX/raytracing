@@ -42,7 +42,7 @@ int main() {
 	// --- 相机设置 ---
 	image2d image(1280, 720);
 	camera3d camera(image);
-	camera.samples_per_pixel = 512;				   // 预览建议 16-32，最终建议 500+
+	camera.samples_per_pixel = 128;				   // 预览建议 16-32，最终建议 500+
 	camera.background_color = vec3(0.7, 0.8, 1.0); // 天蓝色背景
 	camera.look_from = vec3(8);
 	camera.look_at = vec3(0, 0, 0);
@@ -50,10 +50,10 @@ int main() {
 	camera.defocus_angle = 0.0;
 	camera.focus_dist = 13.0;
 	camera.update();
-	fmt::print("[Non-BVH]\n");
-	camera.render(world);
-	image.save_to("image/open_scene.png");
-	fmt::print("[BVH]\n");
+	// fmt::print("[Non-BVH]\n");
+	// camera.render(world);
+	// image.save_to("image/open_scene.png");
+	// fmt::print("[BVH]\n");
 	camera.render(world_bvh);
 	image.save_to("image/bvh_open_scene.png");
 }
