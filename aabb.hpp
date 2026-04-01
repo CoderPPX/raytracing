@@ -16,11 +16,23 @@ struct aabb {
 		x = interval(min_vec.x, max_vec.x);
 		y = interval(min_vec.y, max_vec.y);
 		z = interval(min_vec.z, max_vec.z);
+		pad_to_minimums();
 	}
-	inline aabb(const aabb &a, const aabb &b) {
-		x = interval(a.x, b.x);
-		y = interval(a.y, b.y);
-		z = interval(a.z, b.z);
+	inline static aabb union_(const aabb &a, const aabb &b) {
+		aabb result;
+		result.x = interval::union_(a.x, b.x);
+		result.y = interval::union_(a.y, b.y);
+		result.z = interval::union_(a.z, b.z);
+		// result.pad_to_minimums();
+		return result;
+	}
+	inline static aabb intersection(const aabb &a, const aabb &b) {
+		aabb result;
+		result.x = interval::intersection(a.x, b.x);
+		result.y = interval::intersection(a.y, b.y);
+		result.z = interval::intersection(a.z, b.z);
+		// result.pad_to_minimums();
+		return result;
 	}
 	inline int longest_axis() const {
 		float max_length = max(x.size(), max(y.size(), z.size()));
@@ -37,6 +49,7 @@ struct aabb {
 			float adinv = 1.0 / r.direction[idx];
 			float t0 = (xyz[idx].min_val - r.origin[idx]) * adinv;
 			float t1 = (xyz[idx].max_val - r.origin[idx]) * adinv;
+			// Notes: TBD
 			if (adinv < 0) {
 				std::swap(t0, t1);
 			}

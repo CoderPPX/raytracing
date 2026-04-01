@@ -3,16 +3,17 @@
 #include "aabb.hpp"
 #include "hittable.hpp"
 
-struct bvh_leaf_node;
-struct bvh_node : public hittable {
+struct linear_bvh_leaf_node;
+struct linear_bvh_node : public hittable {
 public:
-	std::unique_ptr<bvh_node> left, right;
+	std::unique_ptr<linear_bvh_node> left, right;
 	constexpr static uint32_t min_batch_size = 8;
 
 public:
-	inline bvh_node() = default;
-	template <typename HittableContainter> inline bvh_node(const HittableContainter &container) {
-		build_bvh(std::begin(container), std::end(container));
+	inline linear_bvh_node() = default;
+	template <typename HittableContainter>
+	inline linear_bvh_node(const HittableContainter &container) {
+		build_linear_bvh(std::begin(container), std::end(container));
 	}
 	inline bool is_leaf() const { return left == nullptr && right == nullptr; }
 	inline bool hit(const ray3d &r, interval ray_t, hit_record &rec,
@@ -20,12 +21,12 @@ public:
 	template <typename Iterator>
 		requires(std::random_access_iterator<Iterator> &&
 				 std::same_as<hittable_ptr, std::iter_value_t<Iterator>>)
-	inline void build_bvh(Iterator begin, Iterator end);
-	// Notes: Compiler通过vtable找到bvh_leaf_node的destructor防止memory leak
-	virtual ~bvh_node() = default;
+	inline void build_linear_bvh(Iterator begin, Iterator end);
+	// Notes: Compiler通过vtable找到linear_bvh_leaf_node的destructor防止memory leak
+	virtual ~linear_bvh_node() = default;
 };
 
-struct bvh_leaf_node : public bvh_node {
+struct linear_bvh_leaf_node : public linear_bvh_node {
 public:
 	std::array<hittable_ptr, min_batch_size> objects;
 };
@@ -33,13 +34,13 @@ public:
 template <typename Iterator>
 	requires(std::random_access_iterator<Iterator> &&
 			 std::same_as<hittable_ptr, std::iter_value_t<Iterator>>)
-inline void bvh_node::build_bvh(Iterator begin, Iterator end) {
+inline void linear_bvh_node::build_linear_bvh(Iterator begin, Iterator end) {
 	for (auto it = begin; it != end; ++it) {
 		bbox = aabb::union_(bbox, (*it)->bbox);
 	}
 	bbox.pad_to_minimums();
 	if (end - begin <= min_batch_size) {
-		auto temp_left = new bvh_leaf_node();
+		auto temp_left = new linear_bvh_leaf_node();
 		temp_left->bbox = bbox;
 		for (uint32_t i = 0; begin + i != end; ++i) {
 			temp_left->objects[i] = *(begin + i);
@@ -59,21 +60,21 @@ inline void bvh_node::build_bvh(Iterator begin, Iterator end) {
 	if (it == begin || it == end) {
 		it = temp.begin() + temp.size() / 2;
 	}
-	left = std::make_unique<bvh_node>();
-	right = std::make_unique<bvh_node>();
-	left->build_bvh(temp.begin(), it);
-	right->build_bvh(it, temp.end());
+	left = std::make_unique<linear_bvh_node>();
+	right = std::make_unique<linear_bvh_node>();
+	left->build_linear_bvh(temp.begin(), it);
+	right->build_linear_bvh(it, temp.end());
 }
 
-inline bool bvh_node::hit(const ray3d &r, interval ray_t, hit_record &rec,
-						  random_generator &generator) const {
+inline bool linear_bvh_node::hit(const ray3d &r, interval ray_t, hit_record &rec,
+								 random_generator &generator) const {
 	if (!bbox.hit(r, ray_t)) {
 		return false;
 	}
 	bool hit_anything = false;
 	if (is_leaf()) {
 		hit_record temp_rec;
-		auto leaf = reinterpret_cast<const bvh_leaf_node *>(this);
+		auto leaf = reinterpret_cast<const linear_bvh_leaf_node *>(this);
 		for (auto &object : leaf->objects) {
 			if (object != nullptr && object->hit(r, ray_t, temp_rec, generator)) {
 				hit_anything = true;

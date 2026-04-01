@@ -21,7 +21,7 @@ struct hit_record {
 #include "material.hpp"
 
 struct hittable {
-	inline virtual aabb bounding_box() const = 0;
+	aabb bbox;
 	inline virtual bool hit(const ray3d &r, interval t_interval, hit_record &rec,
 							random_generator &generator) const = 0;
 };
@@ -29,23 +29,15 @@ using hittable_ptr = std::shared_ptr<hittable>;
 
 struct sphere3d : public hittable {
 public:
-	aabb bbox;
-	ray3d center;
+	vec3 center;
 	float radius;
 	std::shared_ptr<material> mat;
 
 public:
 	sphere3d(vec3 static_center, float r, std::shared_ptr<material> mat)
-		: center(static_center, vec3(0.0)), radius(max(r, 0.f)), mat(mat) {
+		: center(static_center), radius(abs(r)), mat(mat) {
 		vec3 rvec(radius, radius, radius);
 		bbox = aabb(static_center - rvec, static_center + rvec);
-	}
-	sphere3d(vec3 center1, vec3 center2, float r, std::shared_ptr<material> mat)
-		: center(center1, center2 - center1), radius(r), mat(mat) {
-		vec3 rvec(radius, radius, radius);
-		aabb box1(center1 - rvec, center1 + rvec);
-		aabb box2(center2 - rvec, center2 + rvec);
-		bbox = aabb(box1, box2);
 	}
 	// Asuume xyz is normalized
 	static inline vec2 sphere_xyz_to_uv(vec3 xyz) {
@@ -61,8 +53,7 @@ public:
 	}
 	inline bool hit(const ray3d &r, interval t_interval, hit_record &rec,
 					random_generator &) const override {
-		vec3 current_center = center.at(r.time);
-		vec3 oc = current_center - r.origin;
+		vec3 oc = center - r.origin;
 		float a = dot(r.direction, r.direction);
 		float h = dot(r.direction, oc);
 		float c = dot(oc, oc) - radius * radius;
@@ -79,18 +70,16 @@ public:
 		}
 		rec.t = root;
 		rec.point = r.at(root);
-		vec3 outward_normal = normalize(rec.point - current_center);
+		vec3 outward_normal = normalize(rec.point - center);
 		rec.set_face_normal(r, outward_normal);
 		rec.mat = mat;
 		rec.tex_coord = sphere_xyz_to_uv(outward_normal);
 		return true;
 	}
-	inline aabb bounding_box() const override { return bbox; };
 };
 
 struct quadrilateral : public hittable {
 public:
-	aabb bbox;
 	vec3 q, u, v; // starting point and two edges
 	std::shared_ptr<material> mat;
 
@@ -112,7 +101,6 @@ public:
 		}
 		bbox.pad_to_minimums();
 	}
-	inline aabb bounding_box() const override { return bbox; }
 	inline bool hit(const ray3d &r, interval ray_t, hit_record &record,
 					random_generator &generator) const override {
 		float denom = dot(n, r.direction);
@@ -142,7 +130,6 @@ public:
 
 struct triangle : public hittable {
 public:
-	aabb bbox; // TBD
 	vec3 v0, u, v, n, w;
 	std::shared_ptr<material> mat;
 
@@ -154,7 +141,6 @@ public:
 		w = n / len;
 		n /= sqrt(len);
 	}
-	inline aabb bounding_box() const override { return bbox; }
 	inline bool hit(const ray3d &r, interval ray_t, hit_record &rec,
 					random_generator &generator) const override {
 		vec3 edge1 = u; // V1 - V0
@@ -187,20 +173,19 @@ public:
 
 struct hittable_list : public hittable {
 public:
-	aabb bbox;
 	std::vector<hittable_ptr> objects;
 
 public:
 	hittable_list() = default;
 	hittable_list(std::initializer_list<hittable_ptr> hittables) : objects(hittables) {
 		for (auto &object : hittables) {
-			bbox = aabb(bbox, object->bounding_box());
+			bbox = aabb::union_(bbox, object->bbox);
 		}
 	}
 	inline void clear() { objects.clear(); }
 	inline void add(hittable_ptr object) {
 		objects.push_back(object);
-		bbox = aabb(bbox, object->bounding_box());
+		bbox = aabb::union_(bbox, object->bbox);
 	}
 	inline bool hit(const ray3d &r, interval ray_t, hit_record &rec,
 					random_generator &generator) const override {
@@ -216,7 +201,6 @@ public:
 		}
 		return hit_anything;
 	}
-	inline aabb bounding_box() const override { return bbox; }
 };
 
 struct box3d : public hittable_list {
@@ -240,7 +224,6 @@ struct box3d : public hittable_list {
 
 struct instance : public hittable {
 public:
-	aabb bbox;
 	std::shared_ptr<hittable> object;
 	std::vector<mat3> normal_matrices;
 	std::vector<mat4> inv_transforms;
@@ -282,13 +265,10 @@ public:
 		}
 		return hit_anything;
 	}
-	// TBD
-	inline aabb bounding_box() const override { return bbox; }
 };
 
 struct volume_smoke : public hittable {
 public:
-	aabb bbox;
 	float neg_inv_density;
 	std::shared_ptr<hittable> boundary;
 	std::shared_ptr<material> phase_function;
@@ -343,5 +323,4 @@ public:
 		rec.mat = phase_function;
 		return true;
 	}
-	inline aabb bounding_box() const override { return bbox; }
 };

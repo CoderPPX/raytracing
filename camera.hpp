@@ -25,16 +25,15 @@ protected:
 		vec3 p = generator.random_in_unit_disk();
 		return center + p[0] * defocus_disk_u + p[1] * defocus_disk_v;
 	}
-	inline ray3d random_ray_sample(int x, int y, interval time_interval,
-								   random_generator &generator) const {
+	inline ray3d random_ray_sample(int x, int y, random_generator &generator) const {
 		float dx = generator.random_float() - 0.5;
 		float dy = generator.random_float() - 0.5;
 		vec3 pixel_sample = pixel00_loc + ((x + dx) * pixel_du) + ((y + dy) * pixel_dv);
 		vec3 ray_origin = (defocus_angle <= 0.0) ? center : defocus_disk_sample(generator);
-		return ray3d(ray_origin, pixel_sample - ray_origin, generator.random_float(time_interval));
+		return ray3d(ray_origin, pixel_sample - ray_origin);
 	}
 	inline vec3 ray_color(const ray3d &ray, random_generator &generator, hittable_ptr object) {
-		constexpr int max_depth = 32;
+		constexpr int max_depth = 16;
 		ray3d current_ray = ray, scattered_ray;
 		vec3 total_radiance(0.0), throughput(1.0), attenuation;
 		for (int i = 0; i < max_depth; ++i) {
@@ -114,8 +113,9 @@ public:
 					else
 						display_string += ' ';
 				}
-				fmt::format_to(std::back_inserter(display_string), "] {:3d}% | ETA: {:d}s \033[K",
-							   (int)(progress * 100), eta);
+				fmt::format_to(std::back_inserter(display_string),
+							   "] {:3d}% | ETA: {:d}s, Elapsed: {:d}s \033[K",
+							   (int)(progress * 100), eta, elapsed);
 				fmt::print("{}", display_string);
 				std::fflush(stdout);
 				std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -127,7 +127,7 @@ public:
 				static thread_local random_generator generator;
 				vec3 pixel_color(0.0);
 				for (int i = 0; i < samples_per_pixel; ++i) {
-					ray3d ray = random_ray_sample(x, y, interval(0.0, 1.0), generator);
+					ray3d ray = random_ray_sample(x, y, generator);
 					pixel_color += ray_color(ray, generator, object);
 				}
 				image.write_vec3(x, y, pixel_color / (float)samples_per_pixel);

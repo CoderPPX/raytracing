@@ -4,6 +4,13 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <fmt/format.h>
+#ifndef STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
+#endif
+#ifndef STB_IMAGE_WRITE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#endif
+#include "stb_image_write.h"
 using namespace glm;
 
 using color_type = vec<3, uint8_t>;
@@ -17,12 +24,19 @@ struct image2d {
 	inline const color_type &at(ivec2 pos) const { return data[pos.y * width + pos.x]; }
 	// With gamma correction
 	inline void write_vec3(int x, int y, vec3 color) {
+		// if (std::isnan(color.x) || std::isnan(color.y) || std::isnan(color.z))
+		// 	color = vec3(0);
+		// if (std::isinf(color.x) || std::isinf(color.y) || std::isinf(color.z))
+		// 	color = vec3(1);
 		color = sqrt(max(color, vec3(0.0)));
 		this->at(x, y) = clamp(
 			{uint8_t(255.999 * color.r), uint8_t(255.999 * color.g), uint8_t(255.999 * color.b)},
 			color_type(0), color_type(0xFF));
 	}
 	inline float aspect_ratio() const { return (float)width / height; }
+	inline void save_to(const std::string &filename) {
+		stbi_write_png(filename.c_str(), width, height, 3, data.data(), 3 * width);
+	}
 };
 
 template <length_t L, typename T, qualifier Q> struct fmt::formatter<vec<L, T, Q>> {
@@ -66,10 +80,8 @@ template <typename glm_vec> inline bool near_zero(const glm_vec &v) {
 
 struct ray3d {
 	vec3 origin, direction;
-	float time;
 	inline ray3d() = default;
-	inline ray3d(vec3 orig, vec3 dir, float time_ = 0.0)
-		: origin(orig), direction(dir), time(time_) {}
+	inline ray3d(vec3 orig, vec3 dir) : origin(orig), direction(dir) {}
 	inline vec3 at(float t) const { return origin + t * direction; }
 };
 
@@ -80,8 +92,12 @@ struct interval {
 	inline interval(float min_val = +1e36, float max_val = -1e36)
 		: min_val(min_val), max_val(max_val) {}
 	// union of a, b
-	inline interval(interval a, interval b)
-		: min_val(min(a.min_val, b.min_val)), max_val(max(a.max_val, b.max_val)) {}
+	inline static interval union_(interval a, interval b) {
+		return interval(min(a.min_val, b.min_val), max(a.max_val, b.max_val));
+	}
+	inline static interval intersection(interval a, interval b) {
+		return interval(max(a.min_val, b.min_val), min(a.max_val, b.max_val));
+	}
 	inline float size() const { return max_val - min_val; }
 	inline bool contains(float x) const { return min_val <= x && x <= max_val; }
 	inline bool surrounds(float x) const { return min_val < x && x < max_val; }
@@ -100,4 +116,5 @@ struct interval {
 			max_val = x;
 		}
 	}
+	inline float mid() const { return (min_val + max_val) / 2.0; }
 };

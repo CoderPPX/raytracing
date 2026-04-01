@@ -21,7 +21,7 @@ struct metal : public material {
 								ray3d &scattered, random_generator &generator) const override {
 		vec3 reflected = reflect(ray_in.direction, record.normal);
 		reflected = normalize(reflected) + (fuzz_factor * generator.random_unit_vec3());
-		scattered = ray3d(record.point, reflected, ray_in.time);
+		scattered = ray3d(record.point, reflected);
 		attenuation = albedo;
 		return dot(reflected, record.normal) > 0.0;
 	}
@@ -38,7 +38,7 @@ struct lambertian : public material {
 		if (near_zero(scatter_direction)) {
 			scatter_direction = record.normal;
 		}
-		scattered = ray3d(record.point, scatter_direction, ray_in.time);
+		scattered = ray3d(record.point, scatter_direction);
 		attenuation = tex->color(record.tex_coord, record.point);
 		return true;
 	}
@@ -66,7 +66,7 @@ struct dielectric : public material {
 		} else {
 			direction = refract(unit_direction, record.normal, ri);
 		}
-		scattered = ray3d(record.point, direction, ray_in.time);
+		scattered = ray3d(record.point, direction);
 		return true;
 	}
 };
@@ -85,7 +85,7 @@ struct isotropic : public material {
 
 	inline virtual bool scatter(const ray3d &r_in, const hit_record &rec, vec3 &attenuation,
 								ray3d &scattered, random_generator &generator) const override {
-		scattered = ray3d(rec.point, generator.random_unit_vec3(), r_in.time);
+		scattered = ray3d(rec.point, generator.random_unit_vec3());
 		attenuation = tex->color(rec.tex_coord, rec.point);
 		return true;
 	}
