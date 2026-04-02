@@ -1,6 +1,7 @@
 #include "camera.hpp"
 #include "hittable.hpp"
 #include "material.hpp"
+#include "ppmshow.hpp"
 #include "bvh.hpp"
 
 int main() {
@@ -55,5 +56,5 @@ int main() {
 	// image.save_to("image/open_scene.png");
 	// fmt::print("[BVH]\n");
 	camera.render(world_bvh);
-	image.save_to("image/bvh_open_scene.png");
+	return ppmshow_and_write(image, "image/bvh_open_scene.png");
 }

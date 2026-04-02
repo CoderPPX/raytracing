@@ -98,7 +98,7 @@ struct interval {
 	inline static interval intersection(interval a, interval b) {
 		return interval(max(a.min_val, b.min_val), min(a.max_val, b.max_val));
 	}
-	inline float size() const { return max_val - min_val; }
+	inline float size() const { return max_val > min_val ? max_val - min_val : 0.f; }
 	inline bool contains(float x) const { return min_val <= x && x <= max_val; }
 	inline bool surrounds(float x) const { return min_val < x && x < max_val; }
 	inline float clamp(float x) const {

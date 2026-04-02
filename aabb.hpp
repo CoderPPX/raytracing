@@ -18,6 +18,13 @@ struct aabb {
 		z = interval(min_vec.z, max_vec.z);
 		pad_to_minimums();
 	}
+	inline aabb &union_(const aabb &other) {
+		x = interval::union_(x, other.x);
+		y = interval::union_(y, other.y);
+		z = interval::union_(z, other.z);
+		// result.pad_to_minimums();
+		return *this;
+	}
 	inline static aabb union_(const aabb &a, const aabb &b) {
 		aabb result;
 		result.x = interval::union_(a.x, b.x);
@@ -65,6 +72,28 @@ struct aabb {
 		}
 		return true;
 	}
+	inline bool hit(const ray3d &r, interval ray_t, float &hit_t) const {
+		for (int idx = 0; idx < 3; idx++) {
+			float adinv = 1.0 / r.direction[idx];
+			float t0 = (xyz[idx].min_val - r.origin[idx]) * adinv;
+			float t1 = (xyz[idx].max_val - r.origin[idx]) * adinv;
+			// Notes: TBD
+			if (adinv < 0) {
+				std::swap(t0, t1);
+			}
+			if (t0 > ray_t.min_val) {
+				ray_t.min_val = t0;
+			}
+			if (t1 < ray_t.max_val) {
+				ray_t.max_val = t1;
+			}
+			if (ray_t.max_val <= ray_t.min_val) {
+				return false;
+			}
+		}
+		hit_t = ray_t.min_val;
+		return true;
+	}
 	inline void pad_to_minimums() {
 		constexpr float delta = 0.0001;
 		if (x.size() < delta) {
@@ -76,5 +105,9 @@ struct aabb {
 		if (z.size() < delta) {
 			z.expand(delta);
 		}
+	}
+	inline float surface_area() const {
+		float sx = x.size(), sy = y.size(), sz = z.size();
+		return 2.0 * (sx * sy + sy * sz + sz * sx);
 	}
 };
