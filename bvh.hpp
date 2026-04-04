@@ -188,14 +188,14 @@ inline bool bvh_node::hit_recursive(const ray3d &r, interval ray_t, hit_record &
 inline bool bvh_node::hit(const ray3d &r, interval ray_t, hit_record &rec,
 						  random_generator &generator) const {
 	static thread_local std::array<const bvh_node *, 32> node_stack;
+	if (!bbox.hit(r, ray_t)) {
+		return false;
+	}
 	int32_t stack_ptr = 0;
 	node_stack[stack_ptr++] = this;
 	bool hit_anything = false;
 	while (stack_ptr != 0) {
 		auto node_ptr = node_stack[--stack_ptr];
-		if (!node_ptr->bbox.hit(r, ray_t)) {
-			continue;
-		}
 		if (node_ptr->is_leaf()) {
 			auto leaf = reinterpret_cast<const bvh_leaf_node *>(node_ptr);
 			for (auto &object : leaf->objects) {
@@ -206,9 +206,8 @@ inline bool bvh_node::hit(const ray3d &r, interval ray_t, hit_record &rec,
 			}
 			continue;
 		}
-		float left_t, right_t;
-		bool left_hit =
-			node_ptr->left != nullptr ? node_ptr->left->bbox.hit(r, ray_t, left_t) : false;
+		float left_t = +1e35, right_t = +1e35;
+		bool left_hit = node_ptr->left->bbox.hit(r, ray_t, left_t);
 		bool right_hit =
 			node_ptr->right != nullptr ? node_ptr->right->bbox.hit(r, ray_t, right_t) : false;
 		if (left_t > right_t) {

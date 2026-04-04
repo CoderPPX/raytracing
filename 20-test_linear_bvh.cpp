@@ -40,7 +40,7 @@ int main() {
 	}
 	// 传入 objects 内部的 std::vector<hittable_ptr>
 	// 这会触发你的 bvh_node::build_bvh 逻辑
-	auto world_bvh = std::make_shared<bvh_node>(world->objects);
+	auto world_bvh = std::make_shared<linear_bvh>(world->objects);
 	// --- 相机设置 ---
 	image2d image(1280, 720);
 	camera3d camera(image);
