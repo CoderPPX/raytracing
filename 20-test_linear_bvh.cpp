@@ -2,7 +2,6 @@
 #include "hittable.hpp"
 #include "material.hpp"
 #include "ppmshow.hpp"
-#include "bvh.hpp"
 #include "linear_bvh.hpp"
 
 int main() {

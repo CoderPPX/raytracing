@@ -3,7 +3,6 @@
 #include "material.hpp"
 #include "ppmshow.hpp"
 #include "bvh.hpp"
-#include "linear_bvh.hpp"
 
 int main() {
 	auto world = std::make_shared<hittable_list>();
@@ -18,23 +17,23 @@ int main() {
 		for (int j = -grid_size / 2; j < grid_size / 2; j++) {
 			// 随机选择材质类型
 			auto choose_mat = gen.random_float();
-			vec3 center(i * 2.2 + gen.random_float(0, 0.5), 0.2,
+			vec3 center(i * 2.2 + gen.random_float(0, 0.5), 0.5,
 						j * 2.2 + gen.random_float(0, 0.5));
 			if (choose_mat < 0.7) {
 				// 漫反射球 (随机颜色)
 				auto albedo = gen.random_vec3() * gen.random_vec3();
 				world->add(
-					std::make_shared<sphere3d>(center, 0.2, std::make_shared<lambertian>(albedo)));
+					std::make_shared<sphere3d>(center, 0.5, std::make_shared<lambertian>(albedo)));
 			} else if (choose_mat < 0.9) {
 				// 金属球
 				auto albedo = gen.random_vec3(0.5, 1);
 				auto fuzz = gen.random_float(0, 0.5);
 				world->add(
-					std::make_shared<sphere3d>(center, 0.2, std::make_shared<metal>(albedo, fuzz)));
+					std::make_shared<sphere3d>(center, 0.5, std::make_shared<metal>(albedo, fuzz)));
 			} else {
 				// 玻璃球
 				world->add(
-					std::make_shared<sphere3d>(center, 0.2, std::make_shared<dielectric>(1.5)));
+					std::make_shared<sphere3d>(center, 0.5, std::make_shared<dielectric>(1.5)));
 			}
 		}
 	}
@@ -44,9 +43,9 @@ int main() {
 	// --- 相机设置 ---
 	image2d image(1280, 720);
 	camera3d camera(image);
-	camera.samples_per_pixel = 128;				   // 预览建议 16-32，最终建议 500+
+	camera.samples_per_pixel = 1024;			   // 预览建议 16-32，最终建议 500+
 	camera.background_color = vec3(0.7, 0.8, 1.0); // 天蓝色背景
-	camera.look_from = vec3(8);
+	camera.look_from = vec3(3);
 	camera.look_at = vec3(0, 0, 0);
 	camera.fov = radians(90.0);
 	camera.defocus_angle = 0.0;

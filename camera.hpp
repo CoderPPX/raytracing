@@ -11,7 +11,8 @@ public:
 	vec3 look_from{0.0, 0.0, 0.0}, look_at{0.0, 0.0, -1.0};
 	float fov = radians(90.f);
 	float defocus_angle = radians(0.0), focus_dist = 10.0;
-	int samples_per_pixel = 16, max_depth = 32;
+	int samples_per_pixel = 16, max_depth = 32, sqrt_spp;
+	float inv_sqrt_spp, pixel_samples_scale;
 	vec3 background_color{0.70, 0.80, 1.00};
 
 protected:
@@ -28,6 +29,14 @@ protected:
 	inline ray3d random_ray_sample(int x, int y, random_generator &generator) const {
 		float dx = generator.random_float() - 0.5;
 		float dy = generator.random_float() - 0.5;
+		vec3 pixel_sample = pixel00_loc + ((x + dx) * pixel_du) + ((y + dy) * pixel_dv);
+		vec3 ray_origin = (defocus_angle <= 0.0) ? center : defocus_disk_sample(generator);
+		return ray3d(ray_origin, pixel_sample - ray_origin);
+	}
+	inline ray3d random_ray_sample_stratified(int x, int y, int i, int j,
+											  random_generator &generator) const {
+		float dx = ((i + generator.random_float()) * inv_sqrt_spp) - 0.5;
+		float dy = ((j + generator.random_float()) * inv_sqrt_spp) - 0.5;
 		vec3 pixel_sample = pixel00_loc + ((x + dx) * pixel_du) + ((y + dy) * pixel_dv);
 		vec3 ray_origin = (defocus_angle <= 0.0) ? center : defocus_disk_sample(generator);
 		return ray3d(ray_origin, pixel_sample - ray_origin);
@@ -87,6 +96,9 @@ public:
 		defocus_disk_v = v * defocus_radius;
 	}
 	inline void render(hittable_ptr object) {
+		sqrt_spp = int(std::sqrt(samples_per_pixel));
+		inv_sqrt_spp = 1.f / sqrt_spp;
+		pixel_samples_scale = 1.0 / (sqrt_spp * sqrt_spp);
 		std::atomic_bool render_done = false;
 		std::atomic_int64_t pixel_counter = 0;
 		std::thread display_thread([&] {
@@ -123,14 +135,16 @@ public:
 		});
 #pragma omp parallel for collapse(2)
 		for (int y = 0; y < image.height; ++y) {
-			for (int x = 0; x < image.width; x++) {
+			for (int x = 0; x < image.width; ++x) {
 				static thread_local random_generator generator;
 				vec3 pixel_color(0.0);
-				for (int i = 0; i < samples_per_pixel; ++i) {
-					ray3d ray = random_ray_sample(x, y, generator);
-					pixel_color += ray_color(ray, generator, object);
+				for (int i = 0; i < sqrt_spp; ++i) {
+					for (int j = 0; j < sqrt_spp; ++j) {
+						ray3d ray = random_ray_sample_stratified(x, y, i, j, generator);
+						pixel_color += ray_color(ray, generator, object);
+					}
 				}
-				image.write_vec3(x, y, pixel_color / (float)samples_per_pixel);
+				image.write_vec3(x, y, pixel_color * pixel_samples_scale);
 				pixel_counter.fetch_add(1, std::memory_order_relaxed);
 			}
 		}
