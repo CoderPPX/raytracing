@@ -128,48 +128,6 @@ public:
 	}
 };
 
-struct triangle : public hittable {
-public:
-	vec3 v0, u, v, n, w;
-	std::shared_ptr<material> mat;
-
-public:
-	inline triangle(vec3 p1, vec3 p2, vec3 p3,
-					std::shared_ptr<material> mat_ = std::make_shared<lambertian>(vec3(0.8)))
-		: v0(p1), u(p2 - p1), v(p3 - p1), n(cross(u, v)), mat(mat_) {
-		float len = length_square(n);
-		w = n / len;
-		n /= sqrt(len);
-	}
-	inline bool hit(const ray3d &r, interval ray_t, hit_record &rec,
-					random_generator &generator) const override {
-		vec3 edge1 = u; // V1 - V0
-		vec3 edge2 = v; // V2 - V0
-		vec3 pvec = cross(r.direction, edge2);
-		float det = dot(edge1, pvec);
-		// 如果 det 接近 0，说明光线与三角形平面平行
-		if (std::abs(det) < 1e-8)
-			return false;
-		float inv_det = 1.0f / det;
-		vec3 tvec = r.origin - v0;
-		float u_coord = dot(tvec, pvec) * inv_det;
-		if (u_coord < 0 || u_coord > 1)
-			return false;
-		vec3 qvec = cross(tvec, edge1);
-		float v_coord = dot(r.direction, qvec) * inv_det;
-		if (v_coord < 0 || u_coord + v_coord > 1)
-			return false;
-		float t = dot(edge2, qvec) * inv_det;
-		if (!ray_t.contains(t))
-			return false;
-		rec.t = t;
-		rec.point = r.at(t);
-		rec.set_face_normal(r, n); // n 依然建议预计算并归一化
-		rec.mat = mat;
-		rec.tex_coord = vec2(u_coord, v_coord);
-		return true;
-	}
-};
 
 struct hittable_list : public hittable {
 public:

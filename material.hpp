@@ -15,7 +15,7 @@ struct material {
 struct metal : public material {
 	vec3 albedo;
 	float fuzz_factor;
-	inline metal(vec3 color = vec3{1.0, 0.0, 0.0}, float fuzz = 0.05)
+	inline metal(vec3 color = vec3{1.0, 1.0, 1.0}, float fuzz = 0.05)
 		: albedo(color), fuzz_factor(fuzz) {}
 	inline virtual bool scatter(const ray3d &ray_in, const hit_record &record, vec3 &attenuation,
 								ray3d &scattered, random_generator &generator) const override {
@@ -51,7 +51,10 @@ struct dielectric : public material {
 		// Use Schlick's approximation for reflectance
 		float r0 = (1 - refraction_index) / (1 + refraction_index);
 		r0 = r0 * r0;
-		return r0 + (1 - r0) * std::pow((1 - cosine), 5);
+		float p1 = (1 - cosine), p2 = p1;
+		p1 *= p1;
+		p1 *= p1;
+		return r0 + (1 - r0) * p1 * p2;
 	}
 	inline virtual bool scatter(const ray3d &ray_in, const hit_record &record, vec3 &attenuation,
 								ray3d &scattered, random_generator &generator) const override {
